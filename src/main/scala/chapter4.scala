@@ -14,11 +14,15 @@ object chapter4 {
   sealed trait Option[+A] {
     def fold[B](none: => B)(some: A => B): B
 
-    def map[B](f: A => B): Option[B] =
-      fold[Option[B]](None)(f andThen Some.apply)
+    def map[B](f: A => B): Option[B] = this match {
+      case None ⇒ None
+      case Some(a) ⇒ Some(f(a))
+    }
 
-    def flatMap[B](f: A => Option[B]): Option[B] =
-      fold[Option[B]](None)(f)
+    def flatMap[B](f: A => Option[B]): Option[B] = this match {
+      case None ⇒ None
+      case Some(a) ⇒ f(a)
+    }
 
     def getOrElse[B >: A](default: => B): B =
       fold[B](default)(identity)
@@ -26,8 +30,10 @@ object chapter4 {
     def orElse[B >: A](ob: => Option[B]): Option[B] =
       fold[Option[B]](ob)(Some.apply)
 
-    def filter(f: A => Boolean): Option[A] =
-      fold[Option[A]](None)(a => if (f(a)) Some(a) else None)
+    def filter(f: A => Boolean): Option[A] = this match {
+      case None ⇒ None
+      case Some(a) ⇒ if (f(a)) Some(a) else None    
+    }
   }
 
   def mean(xs: Seq[Double]): Option[Double] =
@@ -36,7 +42,11 @@ object chapter4 {
 
   // exercise 4.2
   def variance(xs: Seq[Double]): Option[Double] =
-    mean(xs).flatMap(m => mean(xs.map(x => math.pow(x-m, 2))))
+    mean(xs).flatMap(m => 
+      mean(
+        xs.map(x => math.pow(x-m, 2))
+      )
+    )
 
   // exercise 4.3
   def map2[A,B,C](a: Option[A], b: Option[B])(f: (A, B) => C): Option[C] =
@@ -46,7 +56,7 @@ object chapter4 {
     }
 
   // exercise 4.4
-  import chapter3stacksafe._, List._
+   import chapter3._, stacksafe._
   def sequence_[A](a: List[Option[A]]): Option[List[A]] = {
     @tailrec def loop(a: List[Option[A]], z: List[A]): Option[List[A]] =
       a match {
@@ -69,6 +79,12 @@ object chapter4 {
       }
     loop(a, Nil)
   }
+
+  def traverse_1[A, B](a: List[A])(f: A => Option[B]): Option[List[B]] =
+    stacksafe.foldLeft[A,Option[List[B]]](a, Some(Nil)) {
+      case (Some(bs), a) => f(a).map(Cons(_, bs))
+      case (shortCircuit, _) => shortCircuit
+    } map (reverse)
 
   def sequence[A](a: List[Option[A]]): Option[List[A]] = traverse(a)(identity)
 
@@ -150,7 +166,7 @@ object chapter4 {
     def map2[EE >:E, B, C](that: ValidationNEL[EE, B])(f: (A,B) => C): ValidationNEL[EE, C] =
       (this, that) match {
         case (Success(a), Success(b)) ⇒ Success(f(a,b))
-        case (Failure(e1), Failure(e2)) ⇒ Failure(List.append(e1,e2))
+        case (Failure(e1), Failure(e2)) ⇒ Failure(append(e1,e2))
         case (Success(a), Failure(e)) ⇒ Failure(e)
         case (Failure(e), Success(b)) ⇒ Failure(e)
       }

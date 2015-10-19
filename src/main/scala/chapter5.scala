@@ -4,7 +4,7 @@ object chapter5 {
   sealed trait Stream[+A] {
     import Stream._
 
-    def headOption_ : Option[A] = this match { 
+    def headOption_ : Option[A] = this match {
       case Empty => None
       case Cons(h, t) => Some(h())
     }
@@ -15,7 +15,7 @@ object chapter5 {
       case Cons(h, t) => t().foldLeft(f(z, h()))(f)
     }
     def reverse: Stream[A] = foldLeft(empty[A])( (l,a) => cons(a,l) )
-    def toList: List[A] = reverse.foldLeft[List[A]](Nil)(_.::(_))
+    def toList: List[A] = reverse.foldLeft[List[A]](Nil)( (as,a) => a :: as)
 
     // exercise 5.2
     def take(n: Int): Stream[A] = {
@@ -26,6 +26,14 @@ object chapter5 {
       }
       loop(n, this, empty).reverse
     }
+
+    def take2(n: Int): Stream[A] = this match {
+      case Empty ⇒ empty
+      case Cons(h, t) ⇒
+        if (n <= 0) empty
+        else cons(h(), t().take2(n-1))
+    }
+
     def drop(n: Int): Stream[A] = this match {
       case Empty => empty
       case Cons(h,t) => if (n > 0) t().drop(n-1) else this
@@ -43,6 +51,13 @@ object chapter5 {
         }
 
       loop(this, empty).reverse
+    }
+
+    def takeWhile2(p: A ⇒ Boolean): Stream[A] = this match {
+      case Empty ⇒ empty
+      case Cons(h,t) ⇒
+        val hEval = h()
+        if (p(hEval)) cons(hEval, t().takeWhile2(p)) else empty
     }
 
     // pg 70
@@ -93,16 +108,19 @@ object chapter5 {
       unfold(this) {
         case z @ Cons(h,t) => Some((z,t()))
         case Empty => None
-      }
+      } append Stream(empty)
 
     // exercise 5.16  // no idea
     def scanRight[B](z: => B)(f: (A, => B) => B): Stream[B] =
       unfold[B,Stream[A]](this) {
         case Empty => None
         case Cons(h,t) =>
-          lazy val b = f(h(), t().foldRight(z)(f))
-          Some(b, t())
+          val b = f(h(), t().foldRight(z)(f))
+          Some((b, t()))
       } append Stream(z)
+
+    def scanRight2[B](z: ⇒ B)(f: (A, ⇒ B) ⇒ B): Stream[B] =
+      tails.map(_.foldRight(z)(f))
   }
 
   case object Empty extends Stream[Nothing]
@@ -143,47 +161,42 @@ object chapter5 {
 
     // exercise 5.12
     def fibs512: Stream[Int] = unfold((0,1)) {
-      case (a,b) => Some(a -> (b,a+b))
+      case (a,b) => Some{ (a, (b,a+b)) }
     }
-    def from512(n: Int): Stream[Int] = unfold(n)(n => Some(n, n+1))
-    def constant512[A](a: A): Stream[A] = unfold(a)(a => Some(a,a))
+    def from512(n: Int): Stream[Int] = unfold(n)(n => Some((n, n+1)))
+    def constant512[A](a: A): Stream[A] = unfold(a)(a => Some((a,a)))
     def ones512: Stream[Int] = constant512(1)
 
     // exercise 5.13
     def map[A,B](fa: Stream[A])(f: A => B): Stream[B] =
       unfold(fa) {
         case Empty => None
-        case Cons(h, t) => Some(f(h()), t())
+        case Cons(h, t) => Some( (f(h()), t()) )
       }
     def take[A](n: Int)(s: Stream[A]): Stream[A] =
-      unfold((n,s)) {
-        case (n, Cons(h,t)) if n > 0 => Some(h(), (n-1, t()))
+      unfold((n, s)) {
+        case (n, Cons(h,t)) if n > 0 => Some((h(), (n-1, t())))
         case _ => None
       }
     def takeWhile[A](s: Stream[A])(f: A => Boolean) =
       unfold(s) {
         case Cons(h,t) =>
           val a = h()
-          if (f(a)) Some(a -> t()) else None
+          if (f(a)) Some((a, t())) else None
         case Empty => None
       }
     def zipWith[A,B,C](as: Stream[A], bs: Stream[B])(f: (A,B) => C): Stream[C] =
       unfold((as,bs)) {
-        case (Cons(ha,ta), Cons(hb,tb)) => Some(f(ha(),hb()) -> (ta(),tb()))
+        case (Cons(ha,ta), Cons(hb,tb)) => Some((f(ha(),hb()), (ta(),tb())))
         case _ => None
       }
     def zipAll[A,B](as: Stream[A], bs: Stream[B]): Stream[(Option[A], Option[B])] =
       unfold((as,bs)) {
         case (Empty, Empty) => None
-        case (Cons(h,t), Empty) => Some((Some(h()), None), (t(), Empty))
-        case (Empty, Cons(h,t)) => Some((None, Some(h())), (Empty, t()))
-        case (Cons(ha,ta), Cons(hb,tb)) => Some((Some(ha()), Some(hb())), (ta(),tb()))
+        case (Cons(h,t), Empty) => Some(((Some(h()), None), (t(), Empty)))
+        case (Empty, Cons(h,t)) => Some(((None, Some(h())), (Empty, t())))
+        case (Cons(ha,ta), Cons(hb,tb)) => Some(((Some(ha()), Some(hb())), (ta(),tb())))
       }
 
   }
-//
-//  def expensive(x: Any) = println(x)
-//  val x = Cons(() => expensive(x), tl)
-//  val h1 = x.headOption
-//  val h2 = x.headOption
 }

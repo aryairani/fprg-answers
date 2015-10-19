@@ -4,7 +4,7 @@ class chapter4test extends org.specs2.mutable.Specification {
 
   "chapter 4" >> {
     "traverse examples" >> {
-      import fp_in_scala.chapter3stacksafe.List
+      import fp_in_scala.chapter3.List
       import fp_in_scala.chapter4.{Either, Left, Right}
       val l1 = List[Either[Int,Int]](Right(1), Right(2), Right(3))
       val l2 = List[Either[Int,Int]](Left(1),  Right(2), Right(3))
@@ -19,7 +19,7 @@ class chapter4test extends org.specs2.mutable.Specification {
 }
 
 class chapter4spec extends org.specs2.Specification {
-  import fp_in_scala.chapter3stacksafe.List
+  import fp_in_scala.chapter3.List
   import fp_in_scala.chapter4.{Either, Left, Right}
   val l1 = List[Either[Int,Int]](Right(1), Right(2), Right(3))
   val l2 = List[Either[Int,Int]](Left(1),  Right(2), Right(3))
