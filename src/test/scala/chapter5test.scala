@@ -1,7 +1,6 @@
-package fp_in_scala
+package fp_in_scala.chapter5
 
 class chapter5spec extends org.specs2.Specification {
-  import fp_in_scala.chapter5._
 
   def is = s2"""
   chapter 5
@@ -57,23 +56,102 @@ class chapter5spec extends org.specs2.Specification {
   private val s: Stream[Int] = Stream(1, 2, 3, 4, 5)
 }
 
-//import org.scalacheck._
-//
-//object chapter5test extends Properties("chapter2") {
-//  import chapter5._
-//
-//  val smallInteger = Gen.choose(1,100)
-//
-//  property("Stream.take/drop") = Prop.forAll(smallInteger) { n =>
-//    fib(n) == (n match {
-//      case 1 => 0
-//      case 2 => 1
-//      case n => fib(n-1) + fib(n-2)
-//    })
-//  }
-//
-//  property("isSorted") = Prop.forAll { (as: Vector[Int]) =>
-//    val intLT: (Int,Int) => Boolean = _ <= _
-//    isSorted(as, intLT) == (as == as.sortWith(intLT))
-//  }
-//}
+object LazyCheck extends App {
+  import org.apache.commons.lang3.mutable.MutableInt
+
+  /** an infinite, recursive stream that counts the number of cells which evaluate the head/car */
+  def inf: (Stream[Int], MutableInt) = {
+    val evals = new MutableInt(0)
+    def loop: Stream[Int] = Stream.cons({ evals.increment(); evals.getValue}, loop)
+    (loop, evals)
+  }
+
+  /** an infinite, unfolded stream that counts the number of cells that are created/unfolded/cdr */
+  def unf: (Stream[Int], MutableInt) = {
+    val evals = new MutableInt(0)
+    val stream = Stream.unfold(evals) { evals ⇒
+      evals.increment()
+      Some((evals.getValue.toInt, evals))
+    }
+    (stream, evals)
+  }
+
+  /** apply a function to an "inf" stream and render the number of evaluations */
+  def e(f: Stream[Int] ⇒ Any): String = {
+    val (s, evals) = inf
+    f(s)
+    s"$evals evals"
+  }
+
+  /** apply a function to an "unf" stream and render the number of unfolds */
+  def u(f: Stream[Int] ⇒ Any): String = {
+    val (s, evals) = unf
+    f(s)
+    s"$evals unfolds"
+  }
+  /** measure "unf" and "inf" */
+  def ue(f: Stream[Int] ⇒ Any): String =
+    s"${u(f)}, ${e(f)}"
+
+  /** apply a function that passes a lazy arg to a stream and render how many times that arg is evaluated */
+  def a[A](a: ⇒ A)(f: (⇒A) ⇒ Stream[A]) = {
+    var evals = 0
+    f({ evals += 1; a })
+    s"$evals argument evals"
+  }
+
+  /** apply a function to two "inf" streams and render how many head/car evaluations are performed */
+  def e2(f: (Stream[Int],Stream[Int]) ⇒ Any): String = {
+    val (s1, evals1) = inf
+    val (s2, evals2) = inf
+
+    f(s1,s2)
+    s"$evals1 + $evals2 evals"
+  }
+  /** apply a function to two "unf" streams and render how many unfolds are performed */
+  def u2(f: (Stream[Int],Stream[Int]) ⇒ Any): String = {
+    val (s1, evals1) = unf
+    val (s2, evals2) = unf
+
+    f(s1,s2)
+    s"$evals1 + $evals2 unfolds"
+  }
+
+  /** measure "unf" and "inf" for functions of two streams */
+  def ue2(f: (Stream[Int],Stream[Int]) ⇒ Any): String =
+    s"${u2(f)}, ${e2(f)}"
+
+  val N = 100
+  val k = 20
+  println(
+    s"""drop($N)                 ${ ue(_.drop(N)) }
+       |take($N)                 ${ ue(_.take(N)) }
+       |take2($N)                ${ ue(_.take2(N)) }
+       |
+       |takeWhile53(_ < $k)       ${ ue(_.takeWhile53(_ < k)) }
+       |takeWhile2(_ < $k)        ${ ue(_.takeWhile2(_ < k)) }
+       |takeWhile(_ < $k)         ${ ue(_.takeWhile(_ < k)) }
+       |
+       |headOption                ${ ue(_.headOption) }
+       |
+       |fill('x')($N)            ${ a('x')(Stream.fill(N)) }
+       |
+       |map(_ * 2)                ${ ue(_.map(_ * 2)) }
+       |filter(_ % 2 == 0)        ${ ue(_.filter(_ % 2 == 0)) }
+       |filter(_ < $k)            ${ ue(_.filter(_ < k)) }
+       |
+       |$N/append/$N            ${ ue2( (a,b) ⇒ a.take2(N) append b.take2(N)) }
+       |$N/flatMap(a => Stream.fill(a)(a)) ${ ue(_.take2(N).flatMap(a ⇒ Stream.fill(a)(a))) }
+       |
+       |zipall(/$N,/$k)          ${ ue2( (a,b) ⇒ Stream.zipAll(a.take2(N), b.take2(k)) ) }
+       |zipall(/$k,/$N)          ${ ue2( (a,b) ⇒ Stream.zipAll(a.take2(k), b.take2(N)) ) }
+       |
+       |$N/startsWith/$k         ${ ue2( (a,b) ⇒ a.take2(N) startsWith b.take2(k)) }
+       |$N/startsWith2/$k        ${ ue2( (a,b) ⇒ a.take2(N) startsWith2 b.take2(k)) }
+       |
+       |tails                     ${ ue(_.tails) }
+       |
+       |$N/scanRight(0)(_ + _)   ${ ue(_.take2(N).scanRight(0)(_ + _)) }
+     """.stripMargin
+  )
+}

@@ -1,6 +1,6 @@
 package fp_in_scala
 
-object chapter5 {
+package chapter5 {
   sealed trait Stream[+A] {
     import Stream._
 
@@ -68,6 +68,22 @@ object chapter5 {
 //      }
 
     // pg 71
+    /*
+    0, List(1,2,3,4)   f = (_+_)
+    foldLeft looks like f(f(f(f(0,1),2),3),4)
+
+    List(1,2,3,4), 0   f = (_+_)
+    foldRight looks like f(1, f(2, f(3, f(4, 0))))
+
+    List(1,2,3,4), 0   f = (_+_)
+    lazy foldRight looks like f(1, f(2, f(3, f(4, 0))))
+                                   ^^^^^^^^^^^^^^^^^^^  f decides whether to evaluate 2nd argument (i.e. recurse)
+
+    List(1,2,3,4,...), 0   f = (_+_)
+    lazy foldRight looks like f(1, f(2, f(3, f(4, ...))))
+      // if infinite stream, 0 never gets used (because doesn't hit the end)
+    */
+
     def foldRight[B](z: => B)(f: (A, => B) => B): B =
       this match {
         case Cons(h, t) => f(h(), t().foldRight(z)(f))
@@ -101,6 +117,15 @@ object chapter5 {
         case ((Some(a1), Some(a2)), b) => a1 == a2 && b
         case ((_, None), _) => true
         case _ => false
+      }
+
+    def startsWith2[B>:A](s: Stream[B]): Boolean =
+      zipAll(this, s).foldRight(true) {
+        (a, lazyB) ⇒ a match {
+          case (Some(a1), Some(a2)) ⇒ a1 == a2 && lazyB
+          case (_, None) ⇒ true
+          case _ ⇒ false
+        }
       }
 
     // exercise 5.15
@@ -178,11 +203,11 @@ object chapter5 {
         case (n, Cons(h,t)) if n > 0 => Some((h(), (n-1, t())))
         case _ => None
       }
-    def takeWhile[A](s: Stream[A])(f: A => Boolean) =
+    def takeWhile[A](s: Stream[A])(f: A => Boolean): Stream[A] =
       unfold(s) {
         case Cons(h,t) =>
           val a = h()
-          if (f(a)) Some((a, t())) else None
+          if (f(a)) Some( (a, t()) ) else None
         case Empty => None
       }
     def zipWith[A,B,C](as: Stream[A], bs: Stream[B])(f: (A,B) => C): Stream[C] =
@@ -200,3 +225,34 @@ object chapter5 {
 
   }
 }
+
+/*
+
+// a client for a key-value store that has a max blob size of 1MB.
+object client {
+  def put(key: String, value: Blob): Unit
+  def get(key: String): Blob
+}
+
+// how to wrap this client to support blobs > 1MB?
+// chosen strategy: append indices to the key, and prepend the true size to the blob before storing
+
+// assume blob.size.toBytes takes up 8 bytes
+// without streams, error-prone arithmetic
+
+// using streams:
+
+def put(key: String, blob: Blob): Unit = {
+  // lazily makes calls to wrapped api as individual blocks are needed
+  def stream = blob.size.toBytes.toStream append blob.toStream
+  stream.chunked(1MB).zipWithindex.foreach {
+    case (chunk, idx) => client.put(s"$key.$idx", chunk)
+  }
+}
+
+def get(key: String): Blob = {
+  val encodedStream = Stream.from(0).flatMap( idx => client.get(s"$key.$idx").toStream )
+  val (length, stream) = encodedStream.splitAt(8) // (Stream, Stream)
+  streamToBlob(stream.take(length.toBytes))
+}
+ */
